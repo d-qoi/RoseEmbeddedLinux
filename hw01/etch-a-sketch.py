@@ -1,9 +1,21 @@
+#! /usr/bin/python3
+
 import curses
 from curses import wrapper
 from time import time
 
+def print_Hello(stdscr):
+    stdscr.clear()
+    stdscr.addstr(0, 0, "Welcome to Alex Hirschfeld's Etch-a-sketch!")
+    stdscr.addstr(2, 0, "Use the cursor keys to move the cursor around.")
+    stdscr.addstr(3, 0, "'shaking' the cursor left and right will clear the screen")
+    stdscr.addstr(4, 0, "Any other key will exit the program")
+    stdscr.addstr(6, 0, "Press any key to start drawing!")
+
+    stdscr.getkey()
 
 def main(stdscr):
+    print_Hello(stdscr)
     shake_count = []
 
     def handle_shake():
