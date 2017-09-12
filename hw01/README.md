@@ -7,3 +7,10 @@
  * tapping left and right 4 times in 2 seconds will clear the screen
  * The program itself is an executable, that will run with python3 if it is installed.
  * Instructions are also printed when the program is run
+ * 
+ 
+
+// Comment from Prof. Yoder
+// See README requirements
+// Python code is very nice.  I like the shake option
+// Grade:  7/10
