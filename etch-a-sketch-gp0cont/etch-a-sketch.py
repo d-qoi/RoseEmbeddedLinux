@@ -57,10 +57,10 @@ def main(stdscr):
     last_key = None
     key = None 
     while running:
-        if GPIO.input(p6) == 0:
+        if GPIO.input(p6) == 1:
             y = y - 1
             x = x
-        elif GPIO.input(p5) == 1:
+        elif GPIO.input(p5) == 0:
             y = y + 1
             x = x
         elif GPIO.input(p3) == 0:
