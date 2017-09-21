@@ -1,3 +1,5 @@
+#! /usr/bin/python3
+
 import smbus
 from time import time, sleep
 
