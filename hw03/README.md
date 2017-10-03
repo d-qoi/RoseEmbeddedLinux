@@ -20,3 +20,6 @@
 * the alert temperature is given in Fahrenheit, and can be passed into this application in celcius with -t
     * the default temp is 20c
     
+# Comments from Prof. Yoder
+# Looks good.  Some comments in your code would help.
+# Grade:  10/10
