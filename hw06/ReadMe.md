@@ -7,3 +7,8 @@
   * In erase mode, the dot will erase color instead of drawing color.
   * "Shaking" the encoder again will switch back to regular drawing mode.
 * "shaking" the vertical encoder will randomly change the color the dot leaves behind.
+
+// Comments from Prof. Yoder
+// Other exercises are missing.
+// It works!
+// Grade:  8/10

@@ -5,3 +5,8 @@
 * three color, rotates through with clicks.
 * starts randomized
 * brightness is controllable. 
+
+// Comments from Prof. Yoder
+// matrixLED answers missing.
+// It works!
+// Grade:  8/10
