@@ -11,3 +11,8 @@
 * Maps two buttons to two LEDs using mmap
 * Uses GPIO0 and GPIO1
 * Maps GP0_2 and GP0_3 to Bat 1 and Bat 4
+
+// Comments from Prof. Yoder
+// Memory Map info is missing.
+// It works!
+// Grade:  8/10
