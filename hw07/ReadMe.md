@@ -1,9 +1,13 @@
-# Etch-a-sketch on i2c display
+# GPIO Timing with Interrupts, constant polling, and kernel level interrupts
 
-## Etch-a-sketch on an ili9341 display
-* Uses Rotary Encoders on ports 2 and 3 for x and y movement
-* Uses Mode and Pause buttons for increasing and decreasin the size of the dot.
-* "shaking" the horizontal movement encoder will change the color of the dot to <span style= color:red> red </span> and switch to erase mode
-  * In erase mode, the dot will erase color instead of drawing color.
-  * "Shaking" the encoder again will switch back to regular drawing mode.
-* "shaking" the vertical encoder will randomly change the color the dot leaves behind.
+*All of these use GP1 3 as the button, and GP1 4 as the LED* 
+
+### gpio_thru_no_interrupt.c
+* Constant polling in c using mmap
+
+### gpio_thru_interrupt.py
+* uses the Adafruit_BBIO.GPIO to set up interrupts on the falling edge of the button signal
+
+### gpio_thru_kernel
+* Uses kernel libraries with interrupts to trigger the led on the falling edge of the button.
+

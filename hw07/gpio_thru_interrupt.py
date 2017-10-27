@@ -6,6 +6,7 @@ GP1_4 = 'GP1_4'
 on = False;
 
 def turnOn(channel):
+    global on
     if on:
         GPIO.output(GP1_4, GPIO.LOW)
         on = False
@@ -16,10 +17,10 @@ def turnOn(channel):
 GPIO.setup(GP1_3, GPIO.IN)
 GPIO.setup(GP1_4, GPIO.OUT)
 
-GPIO.add_event_callback(GP1_3, GPIO.BOTH, callback=turnOn)
+GPIO.add_event_detect(GP1_3, GPIO.FALLING, callback=turnOn)
 
 try:
-    while(true):
+    while(True):
         pass
 except Exception as e:
     print(e)
