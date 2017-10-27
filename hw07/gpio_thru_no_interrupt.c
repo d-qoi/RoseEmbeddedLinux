@@ -57,9 +57,9 @@ int main(int argc, char* argv[]) {
     
     while (cont) {
         if ((*gpio_datain >> GP1_3)&0x1) {
-            *gpio_clear_dataout = 1<<GP1_4;
-        } else {
             *gpio_set_dataout = 1<<GP1_4;
+        } else {
+            *gpio_clear_dataout = 1<<GP1_4;
         }
     }
     munmap((void*)gpio3_addr, GPIO3_SIZE);

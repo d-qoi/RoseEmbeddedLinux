@@ -1,5 +1,6 @@
 #! /usr/bin/python3
 import Adafruit_BBIO.GPIO as GPIO
+import time
 
 GP1_3 = 'GP1_3'
 GP1_4 = 'GP1_4'
@@ -17,10 +18,10 @@ def turnOn(channel):
 GPIO.setup(GP1_3, GPIO.IN)
 GPIO.setup(GP1_4, GPIO.OUT)
 
-GPIO.add_event_detect(GP1_3, GPIO.FALLING, callback=turnOn)
+GPIO.add_event_detect(GP1_3, GPIO.BOTH, callback=turnOn)
 
 try:
     while(True):
-        pass
+        time.sleep(100)
 except Exception as e:
     print(e)
