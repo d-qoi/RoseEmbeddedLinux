@@ -14,3 +14,7 @@
 * Uses kernel libraries with interrupts to trigger the led on the falling edge of the button.
 * Triggering GP1 4 takes 400us
 
+// Comments from Prof. Yoder
+// Results look good, but I asked for min, max and average times and cpu usage.
+// Project page missing
+// Grade:  3/10
