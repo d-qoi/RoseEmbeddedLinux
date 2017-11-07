@@ -79,7 +79,8 @@ struct screenVals {
     int y;
     int z1;
     int z2;
-}
+    bool touch;
+};
 
 struct diffVals {
     unsigned int time_down;
@@ -87,7 +88,17 @@ struct diffVals {
     int diff_y;
     int diff_z1;
     int diff_z2;
-}
+};
+
+struct oneshotVals {
+    unsigned char command;
+    unsigned char data[2];
+};
+
+struct runningVals {
+    unsigned char command;
+    unsigned char data[2];
+};
 
 // Module Params
 module_param(spics, short, S_IRUSR | S_IRGRP | S_IROTH);
@@ -102,13 +113,17 @@ static irq_handler_t penirq_interrupt_handler(unsigned int irq, void* dev_id, st
 
 // Kobject and sysfs
 static struct kset *TSC2046_kset;
+static struct TSC2046_obj* device_obj;
 
 struct TSC2046_obj {
     struct kobject kobj;
     struct screenVals vals;
     struct diffVals diffs;
-    bool reading;
-    struct work_struct get_value;
+    struct oneshotVals oneshot;
+    struct runningVals data;
+    unsigned char PD_vals;
+    bool running;
+    struct work_struct get_value; // for workqueue
 };
 #define to_TSC2046_obj(x) container_of(x, struct TSC2046_obj, kobj)
 
@@ -119,26 +134,18 @@ struct TSC2046_attr {
 };
 #define to_TSC2046_attr(x) container_of(x, struct TSC2046_attr, attr);
 
-static struct
-
-static struct TSC2046_obj* init_TSC2046_obj(const char* name) {
-    struct TSC2046_obj* obj;
-    int retval;
-    
-    obj = kzalloc(sizeof(*obj), GPF_KERNEL);
-    if !(obj) {
-        return NULL;
-    }
-    
-    obj->kobj.kset = TSC2046_kset;
-    retval = kobject_init_and_add(&obj->kobj, )
-}
-
 static ssize_t TSC2046_vals_show(struct TSC2046_obj* obj, struct TSC2046_attr* attr, char* buf) {
-    return 0;
+    printk(KERN_INFO "TSC2046: Vals Show called");
+    struct screenVals* vals = &obj->vals;
+    return sprintf(buf, "x\t%d\ny\t%d\nz1\t%d\nz2\t%d\nactive\t%d\n",
+        vals->x,
+        vals->y,
+        vals->z1,
+        vals->z2,
+        vals->touch);
 }
 
-static size_t TSC2046_diffs_show(struct TSC2046_obj* obj, struct TSC2046_attr* attr, char* buf) {
+static ssize_t TSC2046_diffs_show(struct TSC2046_obj* obj, struct TSC2046_attr* attr, char* buf) {
     return 0;
 }
 
@@ -166,8 +173,93 @@ static ssize_t TSC2046_oneshot_store(struct TSC2046_obj* obj, struct TSC2046_att
     return 0;
 }
 
-static ssize_t TSC2046_null_store(struct TSC2046_obj* obj, struct TSC2046_attr* attr, const char* buf, size_t count) {
-    return 0;
+static void TSC2046_release(struct kobject* kobj) {
+    struct TSC2046_obj* obj;
+    obj = to_TSC2046_obj(kobj);
+    kfree(obj);
+}
+
+static struct TSC2046_attr vals_attr = 
+    __ATTR(vals, 0440, TSC2046_vals_show, NULL);
+static struct TSC2046_attr diffs_attr = 
+    __ATTR(diffs, 0440, TSC2046_diffs_show, NULL);
+static struct TSC2046_attr batt_attr = 
+    __ATTR(battery, 0440, TSC2046_batt_show, NULL);
+static struct TSC2046_attr temp_attr = 
+    __ATTR(temperature, 0440, TSC2046_temp_show, NULL);
+static struct TSC2046_attr PD_attr = 
+    __ATTR(PD_select, 0660, TSC2046_PD_show, TSC2046_PD_store);
+static struct TSC2046_attr oneshot_attr = 
+    __ATTR(oneshot, 0660, TSC2046_oneshot_show, TSC2046_oneshot_store);
+    
+static struct attribute *TSC2046_default_attrs[] = {
+    &vals_attr.attr,
+    &diffs_attr.attr,
+    &batt_attr.attr,
+    &temp_attr.attr,
+    &PD_attr.attr,
+    &oneshot_attr.attr,
+    NULL
+};
+
+static ssize_t TSC2046_attr_show(struct kobject* kobj, struct attribute *attr, char* buf) {
+    struct TSC2046_attr* attribute;
+    struct TSC2046_obj* obj;
+    
+    attribute = to_TSC2046_attr(attr);
+    obj = to_TSC2046_obj(kobj);
+    
+    if (!attribute->show)
+    
+        return -EIO;
+    return attribute->show(obj, attribute, buf);
+}
+
+static ssize_t TSC2046_attr_store(struct kobject* kobj, struct attribute* attr, const char* buf, size_t count) {
+    struct TSC2046_attr* attribute;
+    struct TSC2046_obj* obj;
+    
+    attribute = to_TSC2046_attr(attr);
+    obj = to_TSC2046_obj(kobj);
+    
+    if (!attribute->store)
+        return -EIO;
+    return attribute->store(obj, attribute, buf, count);
+}
+
+static struct sysfs_ops TSC2046_sysfs_ops = {
+    .show = TSC2046_attr_show,
+    .store = TSC2046_attr_store
+};
+
+static struct kobj_type TSC2046_ktype = {
+    .sysfs_ops = &TSC2046_sysfs_ops,
+    .release = &TSC2046_release,
+    .default_attrs = TSC2046_default_attrs
+};
+
+
+static struct TSC2046_obj* init_TSC2046_obj(const char* name) {
+    struct TSC2046_obj* obj;
+    int retval;
+    
+    obj = kzalloc(sizeof(*obj), GFP_KERNEL);
+    if (!obj) {
+        return NULL;
+    }
+    
+    obj->kobj.kset = TSC2046_kset;
+    retval = kobject_init_and_add(&obj->kobj, &TSC2046_ktype, NULL, "%s", name);
+    if (retval) {
+        kobject_put(&obj->kobj);
+        return NULL;
+    }
+    kobject_uevent(&obj->kobj, KOBJ_ADD);
+    return obj;
+}
+
+static void destroy_TSC2046_obj(struct TSC2046_obj* obj) {
+    kobject_put(&obj->kobj);
 }
 
 // Initializations
@@ -182,6 +274,13 @@ static int __init initialization(void){
     
     printk(KERN_INFO "TSC2046: Params :: spics: %hd :: spiport:%hd :: penirq: %hd\n", spics, spiport, penirq);
     
+    
+    if (spics == 0 && spiport == 0 && penirq == 0) {
+        printk(KERN_INFO "TSC2046: Invalid params, please values for spics, spiport, and penirq\n");
+        return -EINVAL;
+    }
+    //printk(KERN_INFO "TS2046: Passed params\n");
+    
     TSC2046_kset = kset_create_and_add(DRIVER_NAME, NULL, firmware_kobj);
     if (!TSC2046_kset) {
         kset_unregister(TSC2046_kset);
@@ -189,29 +288,39 @@ static int __init initialization(void){
         return -EINVAL;
     }
     
-    if (spics == 0 && spiport == 0 && penirq == 0) {
-        printk(KERN_INFO "TSC2046: Invalid params, please values for spics, spiport, and penirq\n");
+    device_obj = init_TSC2046_obj("device");
+    if (!device_obj) {
+        destroy_TSC2046_obj(device_obj);
+        kset_unregister(TSC2046_kset);
+        printk(KERN_INFO "TSC2046: Driver init failed with init_TSC2046_obj");
         return -EINVAL;
     }
-    printk(KERN_INFO "TS2046: Passed params\n");
+    
     if (penirq == 0) {
+        destroy_TSC2046_obj(device_obj);
+        kset_unregister(TSC2046_kset);
         printk(KERN_INFO "TSC2046: Please pass a valid pin for penirq\n");
         return -EINVAL;
     }
-    printk(KERN_INFO "TS2046:passed penirq check\n");
+    
+    //printk(KERN_INFO "TS2046:passed penirq check\n");
     master = spi_busnum_to_master(spiport);
     if (!master) {
+        destroy_TSC2046_obj(device_obj);
+        kset_unregister(TSC2046_kset);
         printk(KERN_INFO "TS2046: Init Failed, Bad Master port, %dh", spiport);
         return -EINVAL;
     }
-    printk(KERN_INFO "TS2046:pass busnum to master\n");
+    //printk(KERN_INFO "TS2046:pass busnum to master\n");
     spi_dev = spi_alloc_device(master);
     if (!spi_dev) {
+        destroy_TSC2046_obj(device_obj);
+        kset_unregister(TSC2046_kset);
         put_device(&master->dev);
         printk(KERN_INFO "TSC2046: Init Failed, Bad Device\n");
         return -EINVAL;
     }
-    printk(KERN_INFO "TS2046:passed spi_alloc\n");
+    //printk(KERN_INFO "TS2046:passed spi_alloc\n");
     spi_dev->chip_select = spics;
     snprintf(buff, sizeof(buff), "%s.%u", dev_name(&spi_dev->master->dev), spi_dev->chip_select);
     
@@ -221,7 +330,7 @@ static int __init initialization(void){
         spi_unregister_device(to_spi_device(temp));
         spi_dev_put(to_spi_device(temp));
     }
-    printk(KERN_INFO "TS2046:passed device busy\n");
+    //printk(KERN_INFO "TS2046:passed device busy\n");
     spi_dev->max_speed_hz = SPI_BUS_SPEED;
     spi_dev->mode = SPI_MODE_0;
     spi_dev->bits_per_word = 8;
@@ -233,12 +342,14 @@ static int __init initialization(void){
     status = spi_add_device(spi_dev);
     
     if (status < 0) {
+        destroy_TSC2046_obj(device_obj);
+        kset_unregister(TSC2046_kset);
         spi_dev_put(spi_dev);
         put_device(&master->dev);
         printk(KERN_INFO "TS2046: Init Failed: Failed to add device\n");
         return status;
     }
-    printk(KERN_INFO "TS2046:pass spi add\n");
+    //printk(KERN_INFO "TS2046:pass spi add\n");
     
     gpio_request(penirq, "sysfs");
     gpio_direction_input(penirq);
@@ -252,13 +363,15 @@ static int __init initialization(void){
                         IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING,   // Interrupt on rising edge (button press, not release)
                         "penirq_interrupt_handler",    // Used in /proc/interrupts to identify the owner
                         NULL);
-    
+    printk(KERN_INFO "TSC2046: Initializations Done");
     return status;
 }
 
 static void __exit exiting(void) {
     spi_dev_put(spi_dev);
     free_irq(irqNumber, NULL);
+    destroy_TSC2046_obj(device_obj);
+    kset_unregister(TSC2046_kset);
     gpio_free(penirq);
     printk(KERN_INFO "TSC2046: Goodbye");
     
