@@ -65,7 +65,7 @@ MODULE_VERSION("0.1");
 #define DEVICE_NAME "TSC2046"
 #define SPI_BUS_SPEED 2000000 //2MHz
 
-#define CREATE_COMMAND(ADC) ((1<<7 | (ADC & 0x7)<<4 | (mode & 0x1)<<3 | (SER & 0x1)<<2 |(device_obj->PD_vals & 0x3));)
+#define CREATE_COMMAND(ADC) ((1<<7 | (ADC & 0x7)<<4 | (mode & 0x1)<<3 | (SER & 0x1)<<2 |(device_obj->PD_vals & 0x3)))
 
 static struct spi_device *spi_dev;
 
@@ -82,14 +82,14 @@ static struct work_struct main_spi_work_struct;
 static struct work_struct running_work_struct;
 static struct work_struct oneshot_work_struct;
 
+const unsigned char adc_vals[] = {0b001, 0b101, 0b011, 0b100};
 struct screenVals {
     int x;
     int y;
     int z1;
     int z2;
     bool touch;
-    unsigned char adc[4] = {0b001, 0b101, 0b011, 0b100};
-    unsigned char i = 0;
+    unsigned char i;
 };
 
 struct diffVals {
@@ -120,7 +120,9 @@ static irq_handler_t penirq_interrupt_handler(unsigned int irq, void* dev_id, st
 
 //helper function
 long long get_time_ns (void)
-{ return timespec_to_ns(current_kernel_time()); }
+{   struct timespec ts = CURRENT_TIME;
+    return timespec_to_ns(&ts); 
+}
 
 
 // Kobject and sysfs
@@ -320,7 +322,7 @@ MODULE_PARM_DESC(SER, "single or dual channel mode");
 
 
 // Work Queue Stuff
-static void main_spi_work_handler(struct work_struct* data) {
+static void main_spi_work_handler(struct work_struct* ws) {
     struct screenVals* vals;
     struct diffVals* diffs;
     unsigned char command;
@@ -329,14 +331,14 @@ static void main_spi_work_handler(struct work_struct* data) {
     vals = &device_obj->vals;
     diffs = &device_obj->diffs;
     if (vals->touch) {
-        command = CREATE_COMMAND(vals->adc[vals->i]);
-        spi_write_then_read(spi_dev, (void*)&command, 1, (void*)&data, 2)
+        command = CREATE_COMMAND(adc_vals[vals->i]);
+        spi_write_then_read(spi_dev, (void*)&command, 1, (void*)&data, 2);
         switch(vals->i) {
             case 0:
                 vals->y = (int)(data[0]<<4 | data[0]>>4);
                 if(!diffs->start_y)
                     diffs->start_y = vals->y;
-                diffs->diff_y = vals->y - diffs->start_y
+                diffs->diff_y = vals->y - diffs->start_y;
                 break;
             case 1:
                 vals->x = (int)(data[0]<<4 | data[0]>>4);
@@ -360,7 +362,7 @@ static void main_spi_work_handler(struct work_struct* data) {
                 vals->i = -1;
         }
         vals->i = (vals->i + 1)%4;
-        schedule_work(&work);
+        schedule_work(&main_spi_work_struct);
     } else {
         
     }
@@ -508,9 +510,11 @@ static void __exit exiting(void) {
 }
 
 static irq_handler_t penirq_interrupt_handler(unsigned int irq, void *dev_id, struct pt_regs *regs) {
-    printk(KERN_INFO "TSC2046: Trigger for IRQ, state: %d\n", gpio_get_value(penirq));
     struct screenVals* vals;
     struct diffVals* diffs;
+    
+    printk(KERN_INFO "TSC2046: Trigger for IRQ, state: %d\n", gpio_get_value(penirq));
+    
     vals = &device_obj->vals;
     diffs = &device_obj->diffs;
     if (gpio_get_value(penirq)) { // if it is a 1, it is released;
@@ -522,7 +526,7 @@ static irq_handler_t penirq_interrupt_handler(unsigned int irq, void *dev_id, st
         diffs->start_time_ns = get_time_ns();
     }
     INIT_WORK(&main_spi_work_struct, main_spi_work_handler);
-    schedule_work(&work);
+    schedule_work(&main_spi_work_struct);
     return (irq_handler_t) IRQ_HANDLED;
 }
 
