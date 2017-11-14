@@ -63,7 +63,7 @@ MODULE_VERSION("0.1");
 
 #define GPIO_TO_PIN(bank, pin) ((32 * bank) + pin);
 #define DEVICE_NAME "TSC2046"
-#define SPI_BUS_SPEED 100000 //100k
+#define SPI_BUS_SPEED 1000000 //100k
 
 #define CREATE_COMMAND(ADC) ((1<<7 | (ADC & 0x7)<<4 | (mode & 0x1)<<3 | (SER & 0x1)<<2 |(device_obj->PD_vals & 0x3)))
 
@@ -150,7 +150,6 @@ static ssize_t TSC2046_vals_show(struct TSC2046_obj* obj, struct TSC2046_attr* a
     struct screenVals* vals;
     vals = &obj->vals;
     
-    printk(KERN_INFO "TSC2046: Vals Show called\n");
     return sprintf(buf, "x\t%d\ny\t%d\nz1\t%d\nz2\t%d\nactive\t%d\n",
         vals->x,
         vals->y,
@@ -163,7 +162,6 @@ static ssize_t TSC2046_diffs_show(struct TSC2046_obj* obj, struct TSC2046_attr* 
     struct diffVals* vals;
     vals = &obj->diffs;
     
-    printk(KERN_INFO "TSC2046: diffs show called\n");
     return sprintf(buf, "x\t%d\ny\t%d\nz1\t%d\nz2\t%d\ntime\t%lld\n",
         vals->diff_x,
         vals->diff_y,
@@ -173,27 +171,41 @@ static ssize_t TSC2046_diffs_show(struct TSC2046_obj* obj, struct TSC2046_attr* 
 }
 
 static ssize_t TSC2046_batt_show(struct TSC2046_obj* obj, struct TSC2046_attr* attr, char* buf) {
-    printk(KERN_INFO "TSC2046: batt show called\n");
-    return 0;
+    char command;
+    char data[2];
+    
+    command = CREATE_COMMAND(0b010);
+    spi_write_then_read(spi_dev, (void*)&command, 1, (void*)&data, 2);
+    return sprintf(buf, "0x%x%x\n", data[1], data[0]);
+    
 }
 
 static ssize_t TSC2046_temp_show(struct TSC2046_obj* obj, struct TSC2046_attr* attr, char* buf) {
-    return 0;
+    char command;
+    char data[2];
+    
+    command = CREATE_COMMAND(0b000);
+    spi_write_then_read(spi_dev, (void*)&command, 1, (void*)&data, 2);
+    return sprintf(buf, "0x%x%x\n", data[1], data[0]);
 }
 
 static ssize_t TSC2046_PD_show(struct TSC2046_obj* obj, struct TSC2046_attr* attr, char* buf) {
-    return 0;
+    return snprintf("%x\n", obj->PD_vals);
 }
 
 static ssize_t TSC2046_PD_store(struct TSC2046_obj* obj, struct TSC2046_attr* attr, const char* buf, size_t count) {
-    return 0;
+    int new_pd;
+    sscanf(buf, "%d", &new_pd);
+    obj->PD_vals = new_pd&0b11
+    return count;
 }
 
 static ssize_t TSC2046_oneshot_show(struct TSC2046_obj* obj, struct TSC2046_attr* attr, char* buf) {
     struct oneshotVals* vals;
     vals = &obj->oneshot;
     
-    printk(KERN_INFO "TSC2046: Oneshow Show Called\n");
+    spi_write_then_read(spi_dev, (void*)&vals->command, 1, (void*)&vals->data, 2);
+    
     return sprintf(buf, "command\t0x%02x\ndata\t0x%04x\n",
         (unsigned int)vals->command,
         (unsigned int)(vals->data[0]<<8 | vals->data[1]));
@@ -202,22 +214,13 @@ static ssize_t TSC2046_oneshot_show(struct TSC2046_obj* obj, struct TSC2046_attr
 static ssize_t TSC2046_oneshot_store(struct TSC2046_obj* obj, struct TSC2046_attr* attr, const char* buf, size_t count) {
     struct oneshotVals* vals;
     unsigned int adc_val;
-    unsigned char command;
-    unsigned char data[2];
     
-    printk(KERN_DEBUG "TSC2046: Oneshot store called\n");
-    printk(KERN_DEBUG "TSC2046: count: %d, buf: %s", count, buf);
+    vals = &obj->oneshotVals;
     if (count != 2) {
         return -1;
     }
     sscanf(buf, "%d", &adc_val);
-    printk(KERN_DEBUG "TSC2046: %x", adc_val);
     vals->command = CREATE_COMMAND(adc_val);
-    
-    command = CREATE_COMMAND(adc_val);
-    spi_write_then_read(spi_dev, (void*)&command, 1, (void*)&data, 2);
-    printk(KERN_DEBUG "TSC2046: command %x\n", command);
-    printk(KERN_DEBUG "TSC: %x%x\n", data[1], data[0]);
     return count;
 }
 
@@ -340,25 +343,25 @@ static void main_spi_work_handler(struct work_struct* ws) {
         //printk(KERN_DEBUG "%x :: %x %x", command, data[0], data[1]);
         switch(vals->i) {
             case 0:
-                vals->y = (int)(data[0]<<4 | data[0]>>4);
+                vals->y = (int)(data[1]<<4 | data[0]>>4);
                 if(!diffs->start_y)
                     diffs->start_y = vals->y;
                 diffs->diff_y = vals->y - diffs->start_y;
                 break;
             case 1:
-                vals->x = (int)(data[0]<<4 | data[0]>>4);
+                vals->x = (int)(data[1]<<4 | data[0]>>4);
                 if(!diffs->start_x)
                     diffs->start_x = vals->x;
                 diffs->diff_x = vals->x - diffs->start_x;
                 break;
             case 2:
-                vals->z1 = (int)(data[0]<<4 | data[0]>>4);
+                vals->z1 = (int)(data[1]<<4 | data[0]>>4);
                 if(!diffs->start_z1)
                     diffs->start_z1 = vals->z1;
                 diffs->diff_z1 = vals->z1 - diffs->start_z1;
                 break;
             case 3:
-                vals->z2 = (int)(data[0]<<4 | data[0]>>4);
+                vals->z2 = (int)(data[1]<<4 | data[0]>>4);
                 if(!diffs->start_z2)
                     diffs->start_z2 = vals->z2;
                 diffs->diff_z2 = vals->z2 - diffs->start_z2;
