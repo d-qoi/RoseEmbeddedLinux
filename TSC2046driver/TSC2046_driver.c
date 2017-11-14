@@ -63,7 +63,7 @@ MODULE_VERSION("0.1");
 
 #define GPIO_TO_PIN(bank, pin) ((32 * bank) + pin);
 #define DEVICE_NAME "TSC2046"
-#define SPI_BUS_SPEED 2000000 //2MHz
+#define SPI_BUS_SPEED 100000 //100k
 
 #define CREATE_COMMAND(ADC) ((1<<7 | (ADC & 0x7)<<4 | (mode & 0x1)<<3 | (SER & 0x1)<<2 |(device_obj->PD_vals & 0x3)))
 
@@ -79,8 +79,6 @@ static unsigned int irqNumber;
 
 static struct workqueue_struct* wq;
 static struct work_struct main_spi_work_struct;
-static struct work_struct running_work_struct;
-static struct work_struct oneshot_work_struct;
 
 const unsigned char adc_vals[] = {0b001, 0b101, 0b011, 0b100};
 struct screenVals {
@@ -204,16 +202,22 @@ static ssize_t TSC2046_oneshot_show(struct TSC2046_obj* obj, struct TSC2046_attr
 static ssize_t TSC2046_oneshot_store(struct TSC2046_obj* obj, struct TSC2046_attr* attr, const char* buf, size_t count) {
     struct oneshotVals* vals;
     unsigned int adc_val;
+    unsigned char command;
+    unsigned char data[2];
     
-    printk(KERN_INFO "TSC2046: Oneshot store called\n");
-    printk(KERN_INFO "TSC2046: count: %d, buf: %s", count, buf);
+    printk(KERN_DEBUG "TSC2046: Oneshot store called\n");
+    printk(KERN_DEBUG "TSC2046: count: %d, buf: %s", count, buf);
     if (count != 2) {
         return -1;
     }
-    sscanf(buf, "%x", &adc_val);
-    printk(KERN_INFO "TSC2046: %d", adc_val);
+    sscanf(buf, "%d", &adc_val);
+    printk(KERN_DEBUG "TSC2046: %x", adc_val);
     vals->command = CREATE_COMMAND(adc_val);
-    printk(KERN_INFO "TSC2046: command %x\n", vals->command);
+    
+    command = CREATE_COMMAND(adc_val);
+    spi_write_then_read(spi_dev, (void*)&command, 1, (void*)&data, 2);
+    printk(KERN_DEBUG "TSC2046: command %x\n", command);
+    printk(KERN_DEBUG "TSC: %x%x\n", data[1], data[0]);
     return count;
 }
 
@@ -327,12 +331,13 @@ static void main_spi_work_handler(struct work_struct* ws) {
     struct diffVals* diffs;
     unsigned char command;
     unsigned char data[2];
-    printk(KERN_INFO "TSC2046: Main Work Handler Called\n");
+    //printk(KERN_INFO "TSC2046: Main Work Handler Called\n");
     vals = &device_obj->vals;
     diffs = &device_obj->diffs;
-    if (vals->touch) {
+    while (vals->touch) {
         command = CREATE_COMMAND(adc_vals[vals->i]);
         spi_write_then_read(spi_dev, (void*)&command, 1, (void*)&data, 2);
+        //printk(KERN_DEBUG "%x :: %x %x", command, data[0], data[1]);
         switch(vals->i) {
             case 0:
                 vals->y = (int)(data[0]<<4 | data[0]>>4);
@@ -362,16 +367,7 @@ static void main_spi_work_handler(struct work_struct* ws) {
                 vals->i = -1;
         }
         vals->i = (vals->i + 1)%4;
-        schedule_work(&main_spi_work_struct);
-    } else {
-        
     }
-}
-static void running_work_handler(struct work_struct* data) {
-    
-}
-static void oneshot_work_handler(struct work_struct* data) {
-    
 }
 
 
