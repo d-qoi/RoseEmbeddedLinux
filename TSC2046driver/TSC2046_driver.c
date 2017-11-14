@@ -53,6 +53,7 @@
 #include <linux/gpio.h>
 #include <linux/workqueue.h>
 #include <linux/time.h>
+#include <linux/delay.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Alex Hirschfeld");
@@ -63,7 +64,7 @@ MODULE_VERSION("0.1");
 
 #define GPIO_TO_PIN(bank, pin) ((32 * bank) + pin);
 #define DEVICE_NAME "TSC2046"
-#define SPI_BUS_SPEED 1000000 //100k
+#define SPI_BUS_SPEED 100000 //100k
 
 #define CREATE_COMMAND(ADC) ((1<<7 | (ADC & 0x7)<<4 | (mode & 0x1)<<3 | (SER & 0x1)<<2 |(device_obj->PD_vals & 0x3)))
 
@@ -370,6 +371,7 @@ static void main_spi_work_handler(struct work_struct* ws) {
                 vals->i = -1;
         }
         vals->i = (vals->i + 1)%4;
+        msleep(10);
     }
 }
 

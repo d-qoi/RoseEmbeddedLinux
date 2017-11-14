@@ -25,5 +25,5 @@ sudo bash << EOF
     sleep 1
     # Insert the framebuffer modules
     #modprobe TSC2046_driver penirq=98 spics=1 spiport=1
-    sudo insmod TSC2046_driver.ko penirq=98 spics=1 spiport=1
+    sudo insmod TSC2046_driver.ko penirq=98 spics=1 spiport=1 mode=1
 EOF
