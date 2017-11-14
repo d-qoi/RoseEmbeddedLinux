@@ -190,12 +190,12 @@ static ssize_t TSC2046_temp_show(struct TSC2046_obj* obj, struct TSC2046_attr* a
 }
 
 static ssize_t TSC2046_PD_show(struct TSC2046_obj* obj, struct TSC2046_attr* attr, char* buf) {
-    return sprintf("%x\n", obj->PD_vals);
+    return sprintf("%hhu\n", &obj->PD_vals);
 }
 
 static ssize_t TSC2046_PD_store(struct TSC2046_obj* obj, struct TSC2046_attr* attr, const char* buf, size_t count) {
-    int new_pd;
-    sscanf(buf, "%d", &new_pd);
+    unsigned char new_pd;
+    sscanf(buf, "%hhu", &new_pd);
     obj->PD_vals = new_pd&0x3;
     return count;
 }
